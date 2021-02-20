@@ -2,7 +2,6 @@ package main
 
 import (
 	"fmt"
-	"time"
 
 	"github.com/davecgh/go-spew/spew"
 	"github.com/pkg/errors"
@@ -38,35 +37,21 @@ func CheckError(err error) {
 	}
 }
 
-// EventsTable holds the internals of the table, i.e,
-// the manager of this instance's database pool (Roach).
-// Here you could also add things like a `logger` with
-// some predefined fields (for structured logging with
-// context).
-type EventsTable struct {
+type UsersTable struct {
 	roach *roach.Roach
 }
 
-// EventsTableConfig holds the configuration passed to
-// the EventsTable "constructor" (`NewEventsTable`).
-type EventsTableConfig struct {
+type UsersTableConfig struct {
 	Roach *roach.Roach
 }
 
-// EventRow represents in a `struct` the information we
-// can get from the table (some fields are insertable but
-// not all - ID and CreatedAt are generated when we `insert`,
-// thus, these can only be retrieved).
-type EventRow struct {
-	Id        string
-	Type      string
-	CreatedAt time.Time
+type UserRow struct {
+	Id       string
+	Password string
+	Username string
 }
 
-// NewEventsTable creates an instance of EventsTable.
-// It performs all of its operation against a pool of connections
-// that is managed by `Roach`.
-func NewEventsTable(cfg EventsTableConfig) (table EventsTable, err error) {
+func NewUsersTable(cfg UsersTableConfig) (table UsersTable, err error) {
 	if cfg.Roach == nil {
 		err = errors.New(
 			"Can't create table without Roach instance")
@@ -74,9 +59,6 @@ func NewEventsTable(cfg EventsTableConfig) (table EventsTable, err error) {
 	}
 
 	table.roach = cfg.Roach
-	// Always try to create the table just in case we don't
-	// create them at the database startup.
-	// This won't fail in case the table already exists.
 	if err = table.createTable(); err != nil {
 		err = errors.Wrapf(err,
 			"Couldn't create table during initialization")
@@ -86,19 +68,14 @@ func NewEventsTable(cfg EventsTableConfig) (table EventsTable, err error) {
 	return
 }
 
-// createTable tries to create a table. If it already exists or not,
-// no error is thrown.
-// The operation only fails in case there's a mismatch in table
-// definition of if there's a connection error.
-func (table *EventsTable) createTable() (err error) {
+func (table *UsersTable) createTable() (err error) {
 	const qry = `
-CREATE TABLE IF NOT EXISTS events (
+CREATE TABLE IF NOT EXISTS users (
 	id char(36) PRIMARY KEY,
-	type text NOT NULL,
-	created_at timestamp with time zone DEFAULT current_timestamp
+	password varchar(64) NOT NULL,
+	username varchar(100) NOT NULL
 )`
 
-	// Exec executes a query without returning any rows.
 	if _, err = table.roach.Db.Exec(qry); err != nil {
 		err = errors.Wrapf(err,
 			"Events table creation query failed (%s)",
@@ -109,24 +86,26 @@ CREATE TABLE IF NOT EXISTS events (
 	return
 }
 
-func (table *EventsTable) InsertEvent(row EventRow) (newRow EventRow, err error) {
-	if row.Type == "" {
-		err = errors.Errorf("Can't create event without Type (%s)",
+func (table *UsersTable) InsertUser(row UserRow) (newRow UserRow, err error) {
+	if row.Username == "" || row.Password == "" {
+		err = errors.Errorf("Can't create user without username and password (%s)",
 			spew.Sdump(row))
 		return
 	}
 
 	const qry = `
-INSERT INTO events (
+INSERT INTO users (
 	id,
-	type
+	username,
+	password
 )
 VALUES (
 	$1,
-	$2
+	$2,
+	$3
 )
 RETURNING
-	id, type`
+	id, username, password`
 
 	// `QueryRow` is a single-row query that, unlike `Query()`, doesn't
 	// hold a connection. Errors from `QueryRow` are forwarded to `Scan`
@@ -137,8 +116,8 @@ RETURNING
 	// If we were just getting a value, we could also check if the query
 	// was successfull but returned 0 rows with `if err == sql.ErrNoRows`.
 	err = table.roach.Db.
-		QueryRow(qry, uuid.NewString(), row.Type).
-		Scan(&newRow.Id, &newRow.Type)
+		QueryRow(qry, uuid.NewString(), row.Username, row.Password).
+		Scan(&newRow.Id, &newRow.Username)
 	if err != nil {
 		err = errors.Wrapf(err,
 			"Couldn't insert user row into DB (%s)",
@@ -149,19 +128,19 @@ RETURNING
 	return
 }
 
-func (table *EventsTable) GetEventsByType(eventType string) (rows []EventRow, err error) {
-	if eventType == "" {
-		err = errors.Errorf("Can't get event rows with empty type")
+func (table *UsersTable) GetUsersByUsername(username string) (rows []UserRow, err error) {
+	if username == "" {
+		err = errors.Errorf("Can't get username with empty string")
 		return
 	}
 
 	const qry = `
 SELECT
-	id, type
+	id, username, password
 FROM
-	events
+	users
 WHERE
-	type = $1`
+	username = $1`
 
 	// `Query()` returns an iterator that allows us to fetch rows.
 	// Under the hood it prepares the query for us (prepares, executes
@@ -169,11 +148,11 @@ WHERE
 	// code - and bad - performance-wise. If you aim to reuse a query,
 	// multiple times in a method, prepare it once and then use it.
 	iterator, err := table.roach.Db.
-		Query(qry, eventType)
+		Query(qry, username)
 	if err != nil {
 		err = errors.Wrapf(err,
-			"Event listing failed (type=%s)",
-			eventType)
+			"User listing failed (type=%s)",
+			username)
 		return
 	}
 	// we must explicitly `Close` iterator at the end because the
@@ -186,17 +165,17 @@ WHERE
 	// to release the resource (connection). The `defer` statement above
 	// would do it at the end of the method but, now you know :)
 	for iterator.Next() {
-		var row = EventRow{}
+		var row = UserRow{}
 		// Here `Scan` performs the data type conversions for us
 		// based on the type of the destination variable.
 		// If an error occur in the conversion, `Scan` will return
 		// that error for you.
 		err = iterator.Scan(
-			&row.Id, &row.Type)
+			&row.Id, &row.Username, &row.Password)
 		if err != nil {
 			err = errors.Wrapf(err,
 				"Event row scanning failed (type=%s)",
-				eventType)
+				username)
 			return
 		}
 
@@ -210,7 +189,7 @@ WHERE
 	if err = iterator.Err(); err != nil {
 		err = errors.Wrapf(err,
 			"Errored while looping through events listing (type=%s)",
-			eventType)
+			username)
 		return
 	}
 
@@ -229,19 +208,20 @@ func main() {
 	defer dbRoach.Close()
 	CheckError(err)
 
-	eventsTable, err := NewEventsTable(EventsTableConfig{
+	usersTable, err := NewUsersTable(UsersTableConfig{
 		Roach: &dbRoach,
 	})
 	CheckError(err)
-	err = eventsTable.createTable()
+	err = usersTable.createTable()
 	CheckError(err)
-	row, err := eventsTable.InsertEvent(EventRow{
-		Type: "b",
+	row, err := usersTable.InsertUser(UserRow{
+		Password: "thisisthepassword",
+		Username: "thisistheusername",
 	})
 	CheckError(err)
 	fmt.Println(spew.Sdump(row))
 
-	rows, err := eventsTable.GetEventsByType("b")
+	rows, err := usersTable.GetUsersByUsername("b")
 	CheckError(err)
 	fmt.Println(spew.Sdump(rows))
 }
