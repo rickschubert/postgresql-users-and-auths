@@ -1,0 +1,1 @@
+- Environment variables can be placed in a `.env` file
