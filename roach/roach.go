@@ -28,10 +28,10 @@ type Config struct {
 	Database string
 }
 
-func New(cfg Config) (roach Roach, err error) {
+func New(cfg Config) (roach Roach, returnErr error) {
 	if cfg.Host == "" || cfg.Port == "" || cfg.User == "" ||
 		cfg.Password == "" || cfg.Database == "" {
-		err = errors.Errorf(
+		returnErr = errors.Errorf(
 			"All fields must be set (%s)",
 			spew.Sdump(cfg))
 		return
@@ -43,37 +43,37 @@ func New(cfg Config) (roach Roach, err error) {
 		"user=%s password=%s dbname=%s host=%s port=%s",
 		cfg.User, cfg.Password, cfg.Database, cfg.Host, cfg.Port))
 	if err != nil {
-		err = errors.Wrapf(err,
+		returnErr = errors.Wrapf(err,
 			"Couldn't open connection to postgre database (%s)",
 			spew.Sdump(cfg))
 		return
 	}
 
 	if err = db.Ping(); err != nil {
-		err = errors.Wrapf(err,
+		returnErr = errors.Wrapf(err,
 			"Couldn't ping postgre database (%s)",
 			spew.Sdump(cfg))
 		return
 	}
 
-	fmt.Println("Successfully connected to database with config: ", spew.Sdump(cfg))
+	fmt.Println("Successfully connected to database", cfg.Database)
 
 	roach.Db = db
 	return
 }
 
-func (r *Roach) Close() (err error) {
+func (r *Roach) Close() (returnErr error) {
 	if r.Db == nil {
 		return
 	}
 
-	if err = r.Db.Close(); err != nil {
-		err = errors.Wrapf(err,
+	if err := r.Db.Close(); err != nil {
+		returnErr = errors.Wrapf(err,
 			"Errored closing database connection",
 			spew.Sdump(r.cfg))
 	}
 
-	fmt.Println("Successfully closed connection to database with config ", spew.Sdump(r.cfg))
+	fmt.Println("Successfully closed connection to database", r.cfg.Database)
 
 	return
 }

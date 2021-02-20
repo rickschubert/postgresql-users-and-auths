@@ -73,7 +73,7 @@ func (table *UsersTable) createTable() (err error) {
 CREATE TABLE IF NOT EXISTS users (
 	id char(36) PRIMARY KEY,
 	password varchar(64) NOT NULL,
-	username varchar(100) NOT NULL
+	username varchar(100) UNIQUE NOT NULL
 )`
 
 	if _, err = table.roach.Db.Exec(qry); err != nil {
@@ -114,10 +114,10 @@ RETURNING
 	// right from the Database the entry that was inserted (plus the fields
 	// that the database generated).
 	// If we were just getting a value, we could also check if the query
-	// was successfull but returned 0 rows with `if err == sql.ErrNoRows`.
+	// was successful but returned 0 rows with `if err == sql.ErrNoRows`.
 	err = table.roach.Db.
 		QueryRow(qry, uuid.NewString(), row.Username, row.Password).
-		Scan(&newRow.Id, &newRow.Username)
+		Scan(&newRow.Id, &newRow.Username, &newRow.Password)
 	if err != nil {
 		err = errors.Wrapf(err,
 			"Couldn't insert user row into DB (%s)",
@@ -128,9 +128,9 @@ RETURNING
 	return
 }
 
-func (table *UsersTable) GetUsersByUsername(username string) (rows []UserRow, err error) {
+func (table *UsersTable) GetUserByUsername(username string) (returnRow UserRow, returnErr error) {
 	if username == "" {
-		err = errors.Errorf("Can't get username with empty string")
+		returnErr = errors.Errorf("Can't get username with empty string")
 		return
 	}
 
@@ -179,7 +179,7 @@ WHERE
 			return
 		}
 
-		rows = append(rows, row)
+		returnRow = row
 	}
 	// If something goes bad during the iteration we would only receive
 	// the errors in `iterator.Err()` - an abnormal scenario would call
@@ -187,7 +187,7 @@ WHERE
 	// error in iterator. By doing this check we safely know whether we
 	// got all our results.
 	if err = iterator.Err(); err != nil {
-		err = errors.Wrapf(err,
+		returnErr = errors.Wrapf(err,
 			"Errored while looping through events listing (type=%s)",
 			username)
 		return
@@ -214,14 +214,17 @@ func main() {
 	CheckError(err)
 	err = usersTable.createTable()
 	CheckError(err)
+	username := uuid.NewString()
 	row, err := usersTable.InsertUser(UserRow{
 		Password: "thisisthepassword",
-		Username: "thisistheusername",
+		// Username: "thisistheusername",
+		// Make it unique for now for testing
+		Username: username,
 	})
 	CheckError(err)
 	fmt.Println(spew.Sdump(row))
 
-	rows, err := usersTable.GetUsersByUsername("b")
+	row, err = usersTable.GetUserByUsername(username)
 	CheckError(err)
-	fmt.Println(spew.Sdump(rows))
+	fmt.Println(spew.Sdump(row))
 }
