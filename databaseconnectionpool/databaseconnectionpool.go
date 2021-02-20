@@ -22,7 +22,7 @@ type Config struct {
 	Database string
 }
 
-func New(cfg Config) (roach ConnectionPool, returnErr error) {
+func New(cfg Config) (pool ConnectionPool, returnErr error) {
 	if cfg.Host == "" || cfg.Port == "" || cfg.User == "" ||
 		cfg.Password == "" || cfg.Database == "" {
 		returnErr = errors.Errorf(
@@ -31,7 +31,7 @@ func New(cfg Config) (roach ConnectionPool, returnErr error) {
 		return
 	}
 
-	roach.cfg = cfg
+	pool.cfg = cfg
 
 	db, err := sql.Open("postgres", fmt.Sprintf(
 		"user=%s password=%s dbname=%s host=%s port=%s",
@@ -52,22 +52,22 @@ func New(cfg Config) (roach ConnectionPool, returnErr error) {
 
 	fmt.Println("Successfully connected to database", cfg.Database)
 
-	roach.Db = db
+	pool.Db = db
 	return
 }
 
-func (r *ConnectionPool) Close() (returnErr error) {
-	if r.Db == nil {
+func (pool *ConnectionPool) Close() (returnErr error) {
+	if pool.Db == nil {
 		return
 	}
 
-	if err := r.Db.Close(); err != nil {
+	if err := pool.Db.Close(); err != nil {
 		returnErr = errors.Wrapf(err,
 			"Errored closing database connection",
-			spew.Sdump(r.cfg))
+			spew.Sdump(pool.cfg))
 	}
 
-	fmt.Println("Successfully closed connection to database", r.cfg.Database)
+	fmt.Println("Successfully closed connection to database", pool.cfg.Database)
 
 	return
 }
