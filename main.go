@@ -51,7 +51,9 @@ func main() {
 	sessionsTable := tables.SetupSessionsTable(&dbConnection)
 
 	username := uuid.NewString()
-	newUser := tables.AddNewUserToUsersTable(usersTable, username)
+	newUser, err := usersTable.InsertUser(username, uuid.NewString())
+	utils.HandleError(err)
+	fmt.Println(spew.Sdump(newUser))
 
 	userRow, err := usersTable.GetUserByUsername(username)
 	utils.HandleError(err)

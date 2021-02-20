@@ -1,9 +1,6 @@
 package tables
 
 import (
-	"fmt"
-
-	"github.com/davecgh/go-spew/spew"
 	"github.com/google/uuid"
 	"github.com/pkg/errors"
 	"github.com/rickschubert/postgresql-users-and-auths/databaseconnectionpool"
@@ -59,10 +56,9 @@ CREATE TABLE IF NOT EXISTS users (
 	return
 }
 
-func (table *UsersTable) InsertUser(row UserRow) (newRow UserRow, err error) {
-	if row.Username == "" || row.Password == "" {
-		err = errors.Errorf("Can't create user without username and password (%s)",
-			spew.Sdump(row))
+func (table *UsersTable) InsertUser(username string, password string) (newRow UserRow, err error) {
+	if username == "" || password == "" {
+		err = errors.Errorf("Can't create user without username and password (%s %s)", username, password)
 		return
 	}
 
@@ -81,12 +77,11 @@ RETURNING
 	id, username, password`
 
 	err = table.connectionPool.Db.
-		QueryRow(qry, uuid.NewString(), row.Username, row.Password).
+		QueryRow(qry, uuid.NewString(), username, password).
 		Scan(&newRow.Id, &newRow.Username, &newRow.Password)
 	if err != nil {
 		err = errors.Wrapf(err,
-			"Couldn't insert user row into DB (%s)",
-			spew.Sdump(row))
+			"Couldn't insert user row into DB (%s)")
 		return
 	}
 
@@ -147,14 +142,4 @@ func SetupUsersTable(dbConnection *databaseconnectionpool.ConnectionPool) UsersT
 	err = usersTable.createTable()
 	utils.HandleError(err)
 	return usersTable
-}
-
-func AddNewUserToUsersTable(usersTable UsersTable, username string) UserRow {
-	row, err := usersTable.InsertUser(UserRow{
-		Password: "thisisthepassword",
-		Username: username,
-	})
-	utils.HandleError(err)
-	fmt.Println(spew.Sdump(row))
-	return row
 }

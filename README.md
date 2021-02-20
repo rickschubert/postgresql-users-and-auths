@@ -5,8 +5,10 @@ This is a small learning project I created for myself in order to get comfortabl
 
 - Creates a users table if not present
 - Creates a sessions table if not present
-- Creates a new user with a UUID as username and a fixed password
+- Creates a new user with a UUID as username and password
 - Creates two new sessions associated with the ID of the user, one active and one non-active one
+
+![recorded user flow](http://g.recordit.co/3fsUhhlbVL.gif)
 
 Given this simple setup it would now be possible to create a small REST API to create a signup and login flow.
 
