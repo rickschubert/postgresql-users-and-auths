@@ -11,7 +11,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/joho/godotenv"
-	roach "github.com/rickschubert/postgresql-users-and-auths/roach"
+	"github.com/rickschubert/postgresql-users-and-auths/databaseconnectionpool"
 
 	_ "github.com/lib/pq"
 )
@@ -38,11 +38,11 @@ func CheckError(err error) {
 }
 
 type UsersTable struct {
-	roach *roach.Roach
+	connectionPool *databaseconnectionpool.ConnectionPool
 }
 
 type UsersTableConfig struct {
-	Roach *roach.Roach
+	ConnectionPool *databaseconnectionpool.ConnectionPool
 }
 
 type UserRow struct {
@@ -52,13 +52,13 @@ type UserRow struct {
 }
 
 func NewUsersTable(cfg UsersTableConfig) (table UsersTable, err error) {
-	if cfg.Roach == nil {
+	if cfg.ConnectionPool == nil {
 		err = errors.New(
 			"Can't create table without Roach instance")
 		return
 	}
 
-	table.roach = cfg.Roach
+	table.connectionPool = cfg.ConnectionPool
 	if err = table.createTable(); err != nil {
 		err = errors.Wrapf(err,
 			"Couldn't create table during initialization")
@@ -76,7 +76,7 @@ CREATE TABLE IF NOT EXISTS users (
 	username varchar(100) UNIQUE NOT NULL
 )`
 
-	if _, err = table.roach.Db.Exec(qry); err != nil {
+	if _, err = table.connectionPool.Db.Exec(qry); err != nil {
 		err = errors.Wrapf(err,
 			"Events table creation query failed (%s)",
 			qry)
@@ -115,7 +115,7 @@ RETURNING
 	// that the database generated).
 	// If we were just getting a value, we could also check if the query
 	// was successful but returned 0 rows with `if err == sql.ErrNoRows`.
-	err = table.roach.Db.
+	err = table.connectionPool.Db.
 		QueryRow(qry, uuid.NewString(), row.Username, row.Password).
 		Scan(&newRow.Id, &newRow.Username, &newRow.Password)
 	if err != nil {
@@ -147,7 +147,7 @@ WHERE
 	// and then closes the prepared stament). This can be good - less
 	// code - and bad - performance-wise. If you aim to reuse a query,
 	// multiple times in a method, prepare it once and then use it.
-	iterator, err := table.roach.Db.
+	iterator, err := table.connectionPool.Db.
 		Query(qry, username)
 	if err != nil {
 		err = errors.Wrapf(err,
@@ -198,18 +198,18 @@ WHERE
 
 func main() {
 	loadDotEnvFile()
-	dbRoach, err := roach.New(roach.Config{
+	dbConnection, err := databaseconnectionpool.New(databaseconnectionpool.Config{
 		Host:     "ec2-52-50-171-4.eu-west-1.compute.amazonaws.com",
 		Password: getDatabasePassword(),
 		Port:     "5432",
 		User:     "hajkxfgyonxjux",
 		Database: "d803lv72ks3706",
 	})
-	defer dbRoach.Close()
+	defer dbConnection.Close()
 	CheckError(err)
 
 	usersTable, err := NewUsersTable(UsersTableConfig{
-		Roach: &dbRoach,
+		ConnectionPool: &dbConnection,
 	})
 	CheckError(err)
 	err = usersTable.createTable()

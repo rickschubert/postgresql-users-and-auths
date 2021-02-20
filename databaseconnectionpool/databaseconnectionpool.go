@@ -1,4 +1,4 @@
-package roach
+package databaseconnectionpool
 
 import (
 	"database/sql"
@@ -9,13 +9,7 @@ import (
 	"github.com/pkg/errors"
 )
 
-// Roach holds the connection pool to the database - created by a configuration
-// object (`Config`).
-type Roach struct {
-	// Db holds a sql.DB pointer that represents a pool of zero or more
-	// underlying connections - safe for concurrent use by multiple
-	// goroutines -, with freeing/creation of new connections all managed
-	// by `sql/database` package.
+type ConnectionPool struct {
 	Db  *sql.DB
 	cfg Config
 }
@@ -28,7 +22,7 @@ type Config struct {
 	Database string
 }
 
-func New(cfg Config) (roach Roach, returnErr error) {
+func New(cfg Config) (roach ConnectionPool, returnErr error) {
 	if cfg.Host == "" || cfg.Port == "" || cfg.User == "" ||
 		cfg.Password == "" || cfg.Database == "" {
 		returnErr = errors.Errorf(
@@ -62,7 +56,7 @@ func New(cfg Config) (roach Roach, returnErr error) {
 	return
 }
 
-func (r *Roach) Close() (returnErr error) {
+func (r *ConnectionPool) Close() (returnErr error) {
 	if r.Db == nil {
 		return
 	}
