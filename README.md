@@ -1,7 +1,7 @@
 PostgresQL table creation and row inserts with Golang
 =====================================================
 
-This is a small learning project I created for myself in order to get comfortable with working with PostgresQL in conjunction. I have a free PostgresQL database created in Heroku (hosted in AWS) and this project does the following:
+This is a small learning project I created for myself in order to get comfortable with working with PostgresQL. I have a free PostgresQL database created in Heroku (hosted in AWS) and this project does the following:
 
 - Creates a users table if not present
 - Creates a sessions table if not present
@@ -10,7 +10,7 @@ This is a small learning project I created for myself in order to get comfortabl
 
 [A video recording of the flow can be found here.](http://g.recordit.co/3fsUhhlbVL.gif)
 
-Given this simple setup it would now be possible to create a small REST API to create a signup and login flow.
+Given this simple setup, it would now be possible to create a small REST API to create a signup and login flow.
 
 # Tools used
 
