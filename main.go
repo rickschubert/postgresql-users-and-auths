@@ -31,7 +31,7 @@ func loadDotEnvFile() {
 	}
 }
 
-func CheckError(err error) {
+func HandleError(err error) {
 	if err != nil {
 		panic(err)
 	}
@@ -49,6 +49,20 @@ type UserRow struct {
 	Id       string
 	Password string
 	Username string
+}
+
+type SessionsTable struct {
+	connectionPool *databaseconnectionpool.ConnectionPool
+}
+
+type SessionsTableConfig struct {
+	ConnectionPool *databaseconnectionpool.ConnectionPool
+}
+
+type SessionRow struct {
+	Id     string
+	Active bool
+	UserId string
 }
 
 func NewUsersTable(cfg UsersTableConfig) (table UsersTable, err error) {
@@ -78,7 +92,42 @@ CREATE TABLE IF NOT EXISTS users (
 
 	if _, err = table.connectionPool.Db.Exec(qry); err != nil {
 		err = errors.Wrapf(err,
-			"Events table creation query failed (%s)",
+			"Users table creation query failed (%s)",
+			qry)
+		return
+	}
+
+	return
+}
+
+func NewSessionsTable(cfg SessionsTableConfig) (table SessionsTable, err error) {
+	if cfg.ConnectionPool == nil {
+		err = errors.New(
+			"Can't create table without ConnectionPool instance")
+		return
+	}
+
+	table.connectionPool = cfg.ConnectionPool
+	if err = table.createTable(); err != nil {
+		err = errors.Wrapf(err,
+			"Couldn't create table during initialization")
+		return
+	}
+
+	return
+}
+
+func (table *SessionsTable) createTable() (err error) {
+	const qry = `
+CREATE TABLE IF NOT EXISTS sessions (
+	id char(36) PRIMARY KEY,
+	active  boolean NOT NULL,
+	userid char(36) NOT NULL
+)`
+
+	if _, err = table.connectionPool.Db.Exec(qry); err != nil {
+		err = errors.Wrapf(err,
+			"Sessions table creation query failed (%s)",
 			qry)
 		return
 	}
@@ -114,6 +163,35 @@ RETURNING
 		err = errors.Wrapf(err,
 			"Couldn't insert user row into DB (%s)",
 			spew.Sdump(row))
+		return
+	}
+
+	return
+}
+
+func (table *SessionsTable) InsertSession(userId string, active bool) (newRow SessionRow, err error) {
+	const qry = `
+INSERT INTO sessions (
+	id,
+	active,
+	userid
+)
+VALUES (
+	$1,
+	$2,
+	$3
+)
+RETURNING
+	id, active, userid`
+
+	err = table.connectionPool.Db.
+		QueryRow(qry, uuid.NewString(), active, userId).
+		Scan(&newRow.Id, &newRow.Active, &newRow.UserId)
+	if err != nil {
+		err = errors.Wrapf(err,
+			"Couldn't insert session for user %s into DB (%s)",
+			userId,
+			spew.Sdump(newRow))
 		return
 	}
 
@@ -174,7 +252,7 @@ func connectToDatabase() databaseconnectionpool.ConnectionPool {
 		User:     "hajkxfgyonxjux",
 		Database: "d803lv72ks3706",
 	})
-	CheckError(err)
+	HandleError(err)
 	return dbConnection
 }
 
@@ -182,25 +260,41 @@ func setupUsersTable(dbConnection *databaseconnectionpool.ConnectionPool) UsersT
 	usersTable, err := NewUsersTable(UsersTableConfig{
 		ConnectionPool: dbConnection,
 	})
-	CheckError(err)
+	HandleError(err)
 	err = usersTable.createTable()
-	CheckError(err)
+	HandleError(err)
 	return usersTable
 }
 
-func addNewUserToUsersTable(usersTable UsersTable, username string) {
+func setupSessionsTable(dbConnection *databaseconnectionpool.ConnectionPool) SessionsTable {
+	sessionsTable, err := NewSessionsTable(SessionsTableConfig{
+		ConnectionPool: dbConnection,
+	})
+	HandleError(err)
+	err = sessionsTable.createTable()
+	HandleError(err)
+	return sessionsTable
+}
+
+func addNewUserToUsersTable(usersTable UsersTable, username string) UserRow {
 	row, err := usersTable.InsertUser(UserRow{
 		Password: "thisisthepassword",
 		Username: username,
 	})
-	CheckError(err)
+	HandleError(err)
 	fmt.Println(spew.Sdump(row))
+	return row
 }
 
 func retrieveUserByUsername(usersTable UsersTable, username string) {
 	row, err := usersTable.GetUserByUsername(username)
-	CheckError(err)
+	HandleError(err)
 	fmt.Println(spew.Sdump(row))
+}
+
+func createSessionForUser(sessionsTable SessionsTable, userId string, active bool) {
+	_, err := sessionsTable.InsertSession(userId, active)
+	HandleError(err)
 }
 
 func main() {
@@ -208,8 +302,12 @@ func main() {
 	dbConnection := connectToDatabase()
 	defer dbConnection.Close()
 
-	username := uuid.NewString()
 	usersTable := setupUsersTable(&dbConnection)
-	addNewUserToUsersTable(usersTable, username)
-	retrieveUserByUsername(usersTable, username)
+	sessionsTable := setupSessionsTable(&dbConnection)
+
+	username := uuid.NewString()
+	newUser := addNewUserToUsersTable(usersTable, username)
+	retrieveUserByUsername(usersTable, newUser.Username)
+	createSessionForUser(sessionsTable, newUser.Id, true)
+	createSessionForUser(sessionsTable, newUser.Id, false)
 }
