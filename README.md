@@ -8,7 +8,7 @@ This is a small learning project I created for myself in order to get comfortabl
 - Creates a new user with a UUID as username and password
 - Creates two new sessions associated with the ID of the user, one active and one non-active one
 
-![recorded user flow](http://g.recordit.co/3fsUhhlbVL.gif)
+<img src="http://g.recordit.co/3fsUhhlbVL.gif" width="40" height="40" />
 
 Given this simple setup it would now be possible to create a small REST API to create a signup and login flow.
 
