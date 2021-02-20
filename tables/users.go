@@ -158,9 +158,3 @@ func AddNewUserToUsersTable(usersTable UsersTable, username string) UserRow {
 	fmt.Println(spew.Sdump(row))
 	return row
 }
-
-func RetrieveUserByUsername(usersTable UsersTable, username string) {
-	row, err := usersTable.GetUserByUsername(username)
-	utils.HandleError(err)
-	fmt.Println(spew.Sdump(row))
-}

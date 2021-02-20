@@ -1,9 +1,11 @@
 package main
 
 import (
+	"fmt"
 	"log"
 	"os"
 
+	"github.com/davecgh/go-spew/spew"
 	"github.com/google/uuid"
 	"github.com/joho/godotenv"
 	"github.com/rickschubert/postgresql-users-and-auths/databaseconnectionpool"
@@ -50,7 +52,16 @@ func main() {
 
 	username := uuid.NewString()
 	newUser := tables.AddNewUserToUsersTable(usersTable, username)
-	tables.RetrieveUserByUsername(usersTable, newUser.Username)
-	tables.CreateSessionForUser(sessionsTable, newUser.Id, true)
-	tables.CreateSessionForUser(sessionsTable, newUser.Id, false)
+
+	userRow, err := usersTable.GetUserByUsername(username)
+	utils.HandleError(err)
+	fmt.Println(spew.Sdump(userRow))
+
+	activeSessionRow, err := sessionsTable.InsertSession(newUser.Id, true)
+	utils.HandleError(err)
+	fmt.Println(spew.Sdump(activeSessionRow))
+
+	inactiveSessionRow, err := sessionsTable.InsertSession(newUser.Id, false)
+	utils.HandleError(err)
+	fmt.Println(spew.Sdump(inactiveSessionRow))
 }
